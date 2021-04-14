@@ -41,6 +41,7 @@ def findBeacon(capture):
     Cette fonction détecte et retourne le premier Beacon de la capture
     """
     for frame in capture:
+        # si la trame est de type et sous-type Beacon, on la retourne 
         if frame.type == 0 and frame.subtype == 8:
             return frame
 
@@ -49,6 +50,7 @@ def findAuthentication(APmac, capture):
     Cette fonction détecte et retourne le mac du client en sa basant sur les messages d'authentification
     """
     for frame in capture:
+        # Si la trame est de type et de sous-type authentification avec l'adresse MAC de l'AP
         if frame.type == 0 and frame.subtype == 11 and a2b_hex(frame.addr2.replace(':', '')) == APmac :
             return a2b_hex(frame.addr1.replace(':', ''))
 
@@ -78,8 +80,11 @@ A = "Pairwise key expansion"  # this string is used in the pseudo-random functio
 
 # recherche du premier beacon dans la capture
 Beacon = findBeacon(wpa)
+# Récupération du SSID
 ssid = Beacon.info.decode("utf-8")
+# Récupération de l'adresse MAC de l'AP
 APmac = a2b_hex(Beacon.addr2.replace(':', ''))          # "cebcc8fdcab7"
+# Récupération de l'adresse MAC du client
 Clientmac = findAuthentication(APmac, wpa)              # "0013efd015bd"
 
 # detection du handshake et renvoi des 4 trames
@@ -94,6 +99,7 @@ SNonce = raw(handshake[1])[65:-72]                            # 7b3826876d14ff30
 mic_to_test = raw(handshake[3])[-18:-2].hex()                 # "36eef66540fa801ceee2fea9b7929b40"
 
 B = min(APmac, Clientmac) + max(APmac, Clientmac) + min(ANonce, SNonce) + max(ANonce, SNonce)  # used in pseudo-random function
+# Récupération de la dernière trame du handshake et remplacement des valeurs de la MIC key avec des zéro
 data = raw(handshake[3])[48:-18] + b"\x00" * 18  # cf "Quelques détails importants" dans la donnée
 
 print("\n\nValues used to derivate keys")
