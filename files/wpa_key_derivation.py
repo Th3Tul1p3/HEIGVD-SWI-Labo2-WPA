@@ -36,7 +36,7 @@ def customPRF512(key, A, B):
         R = R + hmacsha1.digest()
     return R[:blen]
 
-def snifBeacon(capture):
+def findBeacon(capture):
     """
     Cette fonction détecte et retourne le premier Beacon de la capture
     """
@@ -44,7 +44,7 @@ def snifBeacon(capture):
         if frame.type == 0 and frame.subtype == 8:
             return frame
 
-def snifAuthentication(APmac, capture):
+def findAuthentication(APmac, capture):
     """
     Cette fonction détecte et retourne le mac du client en sa basant sur les messages d'authentification
     """
@@ -52,7 +52,7 @@ def snifAuthentication(APmac, capture):
         if frame.type == 0 and frame.subtype == 11 and a2b_hex(frame.addr2.replace(':', '')) == APmac :
             return a2b_hex(frame.addr1.replace(':', ''))
 
-def snif4wayHandShake(capture):
+def find4wayHandShake(capture):
     """
     Cette fonction détecte et retourne le premier 4 way handshake
     """
@@ -77,13 +77,13 @@ passPhrase = "actuelle"
 A = "Pairwise key expansion"  # this string is used in the pseudo-random function
 
 # recherche du premier beacon dans la capture
-Beacon = snifBeacon(wpa)
+Beacon = findBeacon(wpa)
 ssid = Beacon.info.decode("utf-8")
 APmac = a2b_hex(Beacon.addr2.replace(':', ''))          # "cebcc8fdcab7"
-Clientmac = snifAuthentication(APmac, wpa)              # "0013efd015bd"
+Clientmac = findAuthentication(APmac, wpa)              # "0013efd015bd"
 
 # detection du handshake et renvoi des 4 trames
-handshake = snif4wayHandShake(wpa)
+handshake = find4wayHandShake(wpa)
 
 # Authenticator and Supplicant Nonces
 ANonce = handshake[0].getlayer(WPA_key).nonce                 # 90773b9a9661fee1f406e8989c912b45b029c652224e8b561417672ca7e0fd91
